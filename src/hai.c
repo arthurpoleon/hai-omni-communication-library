@@ -482,7 +482,7 @@ void load_parm_file(char **environ)
 #ifdef WIN32
         strcpy(haiconf, "c:\\windows\\hai.ini");
 #else
-        strcpy(haiconf, "/etc/hai-proxy/hai.conf");
+        strcpy(haiconf, "/etc/hai.conf");
 #endif
 
     /* Open file */
