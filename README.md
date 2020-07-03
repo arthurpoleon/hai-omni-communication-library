@@ -6,12 +6,12 @@ HAI Omni-Link Protocol: http://kb.homeauto.com/redirfile.asp?id=447&SID=
 
 Requirements
 ======
-gcc
+gcc\
 libreadline-dev 
 
 Installation
 ======
-make
+make\
 copy hai.conf to /etc
 
 Usage
