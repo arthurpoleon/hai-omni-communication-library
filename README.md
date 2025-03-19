@@ -17,3 +17,14 @@ copy hai.conf to /etc
 Usage
 ======
 sudo hai command
+
+
+bill needed on raspberry pi
+========
+ sudo apt-get install libreadline-dev
+
+make hailib
+
+make haisharedlib 
+
+

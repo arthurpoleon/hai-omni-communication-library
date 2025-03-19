@@ -33,7 +33,6 @@
 #include "hai_net.h"
 #include "hai_serial.h"
 #include "omni_protocol.h"
-#include "help.h"
 #include "aes.h"
 #ifdef READLINE_SUPPORT
 #include "readline.h"
@@ -52,7 +51,7 @@
 typedef char name_str[MAX_NAME_CHARS];
 
 /* Function prototypes */
-void load_parm_file(char **environ);
+void load_parm_file(void);
 void dump_parm_file(void);
 void load_name_cache(void);
 void save_name_cache(void);
@@ -61,15 +60,16 @@ int parse_arg(char *arg);
 int init_connection(hai_comm_id *id, val32 code);
 void term_connection(hai_comm_id *id);
 int cmd_loop(hai_comm_id *id);
-int do_command(hai_comm_id *id, int argc, char *argv[]);
+
 int do_encrypt(hai_comm_id *id, int argc, char *argv[]);
 int do_csv(hai_comm_id *id, int argc, char *argv[]);
 void encrypt_bytes(char *key, char *buf_in, int len_in,
     char *buf_out, int *len_out);
 void decrypt_bytes(char *key, char *buf_in, int len_in, char *buf_out,
     int *len_out);
-int do_sys_info(hai_comm_id *id, int argc, char *argv[]);
-int do_sys_stat(hai_comm_id *id, int argc, char *argv[]);
+HAIEXPORT char* initializeMain(void);
+HAIEXPORT int do_sys_info(void);
+HAIEXPORT int do_sys_stat(void);
 int do_zone_stat(hai_comm_id *id, int argc, char *argv[]);
 int do_unit_stat(hai_comm_id *id, int argc, char *argv[]);
 int do_sensor_stat(hai_comm_id *id, int argc, char *argv[]);
@@ -93,7 +93,7 @@ int do_sensor_cmd(hai_comm_id *id, int argc, char *argv[]);
 int do_thermo_cmd(hai_comm_id *id, int argc, char *argv[]);
 int do_mesg_cmd(hai_comm_id *id, int argc, char *argv[]);
 int do_audio_cmd(hai_comm_id *id, int argc, char *argv[]);
-int do_usersetting_cmd(hai_comm_id *id, int argc, char *argv[]);
+// int do_usersetting_cmd(hai_comm_id *id, int argc, char *argv[]);
 int do_getnames(hai_comm_id *id, int argc, char *argv[]);
 int do_putnames(hai_comm_id *id, int argc, char *argv[]);
 int do_names(hai_comm_id *id, int argc, char *argv[]);
@@ -213,139 +213,259 @@ const char *ac_text[] = {"Off", "Heat", "Cool", "Auto", "Emergency Heat"};
 const char *upb_text[] = {"Off", "On", "Set"};  
 const char *usersetting_text[] = {"Unused", "Number", "Duration", "Temperature", "Humidity", "Date", "Time", "Days of Week", "Level"};  
 
-cmd_item cmd_list[] =
+
+/********************************************************************************/
+int strncmp_no_case (const char *s, const char *t, size_t n)
 {
-    {"help", "display help info",
-    do_help, help_help},
-    {"h", "display help info",
-    do_help, help_help},
-    {"?", "display help info",
-    do_help, help_help},
-    {"exit", "quit program",
-    NULL, NULL},
-    {"x", "quit program",
-    NULL, NULL},
-    {"quit", "quit program",
-    NULL, NULL},
-    {"q", "quit program",
-    NULL, NULL},
-    {"encrypt", "display encrypted configuration",
-    do_encrypt, help_encrypt},
-    {"csv", "change display mode",
-    do_csv, help_csv},
+    int i;
+    for (i = 0; i < n && toupper(*s) == toupper(*t); i++, s++, t++)
+    {
+        if (*s == '\0' || i == n - 1)
+        {
+            return 0;
+        }
+    }
+    return *s-*t;
+}
 
-    /* Status */
-    {"info", "display system information",
-    do_sys_info, help_sys_info},
-    {"stat", "display system status",
-    do_sys_stat, help_sys_stat},
-    {"sum", "display status summary",
-    do_stat_summary, help_stat_summary},
-    {"zones", "display zone status",
-    do_zone_stat, help_zone_stat},
-    {"ready", "display zone ready status",
-    do_zone_ready, help_zone_ready},
-    {"units", "display unit status",
-    do_unit_stat, help_unit_stat},
-    {"sensors", "display temp sensor status",
-    do_sensor_stat, help_sensor_stat},
-    {"thermos", "display thermostat status",
-    do_thermo_stat, help_thermo_stat},
-    {"temps", "display temps from thermos & sensors",
-    do_temp_stat, help_temp_stat},
-    {"mesgs", "display message status",
-    do_mesg_stat, help_mesg_stat},
-    {"users", "display user setting status",
-    do_usersetting_stat, help_usersetting_stat},
+int strcmp_no_case (const char *s, const char *t)
+{
+    for (; toupper(*s) == toupper(*t); s++, t++)
+    {
+        if (*s == '\0')
+        {
+            return 0;
+        }
+    }
+    return *s-*t;
+}
 
-    /* System events */
-    {"events", "display system events",
-    do_events, help_events},
+// cmd_item cmd_list[] =
+// {
+//     {"help", "display help info",
+//     do_help, help_help},
+//     {"h", "display help info",
+//     do_help, help_help},
+//     {"?", "display help info",
+//     do_help, help_help},
+//     {"exit", "quit program",
+//     NULL, NULL},
+//     {"x", "quit program",
+//     NULL, NULL},
+//     {"quit", "quit program",
+//     NULL, NULL},
+//     {"q", "quit program",
+//     NULL, NULL},
+//     {"encrypt", "display encrypted configuration",
+//     do_encrypt, help_encrypt},
+//     {"csv", "change display mode",
+//     do_csv, help_csv},
 
-    /* Commands */
-    {"unit", "send unit command",
-    do_unit_cmd, help_unit_cmd},
-    {"all", "send all command",
-    do_all_cmd, help_all_cmd},
-    {"counter", "send counter command",
-    do_counter_cmd, help_counter_cmd},
-    {"alc", "send alc command",
-    do_alc_cmd, help_alc_cmd},
-    {"compose", "send compose command",
-    do_compose_cmd, help_compose_cmd},
-    {"upb", "send upb command",
-    do_upb_cmd, help_upb_cmd},
-    {"radiora", "send RadioRA command",
-    do_radiora_cmd, help_radiora_cmd},
-    {"scene", "send scene command",
-    do_scene_cmd, help_scene_cmd},
-    {"arm", "send arm command",
-    do_arm_cmd, help_arm_cmd},
-    {"button", "execute macro button",
-    do_button_cmd, help_button_cmd},
-    {"cost", "set energy cost",
-    do_cost_cmd, help_cost_cmd},
-    {"saver", "send saver command",
-    do_saver_cmd, help_saver_cmd},
-    {"sensor", "set temp sensor setpoint",
-    do_sensor_cmd, help_sensor_cmd},
-    {"thermo", "send thermostat commands",
-    do_thermo_cmd, help_thermo_cmd},
-    {"mesg", "send message commands",
-    do_mesg_cmd, help_mesg_cmd},
-    {"audio", "send audio commands",
-    do_audio_cmd, help_audio_cmd},
-    {"user", "send user commands",
-    do_usersetting_cmd, help_user_cmd},
+//     /* Status */
+//     {"info", "display system information",
+//     do_sys_info, help_sys_info},
+//     {"stat", "display system status",
+//     do_sys_stat, help_sys_stat},
+//     {"sum", "display status summary",
+//     do_stat_summary, help_stat_summary},
+//     {"zones", "display zone status",
+//     do_zone_stat, help_zone_stat},
+//     {"ready", "display zone ready status",
+//     do_zone_ready, help_zone_ready},
+//     {"units", "display unit status",
+//     do_unit_stat, help_unit_stat},
+//     {"sensors", "display temp sensor status",
+//     do_sensor_stat, help_sensor_stat},
+//     {"thermos", "display thermostat status",
+//     do_thermo_stat, help_thermo_stat},
+//     {"temps", "display temps from thermos & sensors",
+//     do_temp_stat, help_temp_stat},
+//     {"mesgs", "display message status",
+//     do_mesg_stat, help_mesg_stat},
+//     {"users", "display user setting status",
+//     do_usersetting_stat, help_usersetting_stat},
 
-    /* Names */
-    {"getnames", "display/download names",
-    do_getnames, help_getnames},
-    {"putnames", "upload names",
-    do_putnames, help_putnames},
-    {"names", "display names",
-    do_names, help_names},
-    {"buttons", "display button names",
-    do_buttons, help_buttons},
+//     /* System events */
+//     {"events", "display system events",
+//     do_events, help_events},
 
-    /* Event log */
-    {"log", "display event log",
-    do_log, help_log},
+//     /* Commands */
+//     {"unit", "send unit command",
+//     do_unit_cmd, help_unit_cmd},
+//     {"all", "send all command",
+//     do_all_cmd, help_all_cmd},
+//     {"counter", "send counter command",
+//     do_counter_cmd, help_counter_cmd},
+//     {"alc", "send alc command",
+//     do_alc_cmd, help_alc_cmd},
+//     {"compose", "send compose command",
+//     do_compose_cmd, help_compose_cmd},
+//     {"upb", "send upb command",
+//     do_upb_cmd, help_upb_cmd},
+//     {"radiora", "send RadioRA command",
+//     do_radiora_cmd, help_radiora_cmd},
+//     {"scene", "send scene command",
+//     do_scene_cmd, help_scene_cmd},
+//     {"arm", "send arm command",
+//     do_arm_cmd, help_arm_cmd},
+//     {"button", "execute macro button",
+//     do_button_cmd, help_button_cmd},
+//     {"cost", "set energy cost",
+//     do_cost_cmd, help_cost_cmd},
+//     {"saver", "send saver command",
+//     do_saver_cmd, help_saver_cmd},
+//     {"sensor", "set temp sensor setpoint",
+//     do_sensor_cmd, help_sensor_cmd},
+//     {"thermo", "send thermostat commands",
+//     do_thermo_cmd, help_thermo_cmd},
+//     {"mesg", "send message commands",
+//     do_mesg_cmd, help_mesg_cmd},
+//     {"audio", "send audio commands",
+//     do_audio_cmd, help_audio_cmd},
+//     {"user", "send user commands",
+//     do_usersetting_cmd, help_user_cmd},
 
-    /* Validate security codes */
-    {"valid", "validate security code",
-    do_sec_code_valid, help_sec_code_valid},
+//     /* Names */
+//     {"getnames", "display/download names",
+//     do_getnames, help_getnames},
+//     {"putnames", "upload names",
+//     do_putnames, help_putnames},
+//     {"names", "display names",
+//     do_names, help_names},
+//     {"buttons", "display button names",
+//     do_buttons, help_buttons},
 
-    /* Misc. commands */
-    {"emergency", "activate keypad emergency",
-    do_emergency, help_emergency},
-    {"memo", "play/record voice memo",
-    do_memo, help_memo},
+//     /* Event log */
+//     {"log", "display event log",
+//     do_log, help_log},
 
-    /* Undocumented commands */
-    {"settime", "set time",
-    do_set_time, help_set_time},   
-    {"getsetup", "display/download setup",
-    do_getsetup, help_getsetup},
-    {"putsetup", "upload setup",
-    do_putsetup, help_putsetup},
-    {"getprogram", "display/download program",
-    do_getprogram, help_getprogram},
-    {"putprogram", "upload program",
-    do_putprogram, help_putprogram},
-    {"getvoices", "display/download voices",
-    do_getvoices, help_getvoices},
-    {"putvoices", "upload voices",
-    do_putvoices, help_putvoices},
+//     /* Validate security codes */
+//     {"valid", "validate security code",
+//     do_sec_code_valid, help_sec_code_valid},
 
-    /* End of commands */
-    {NULL, NULL, NULL, NULL}
-};
+//     /* Misc. commands */
+//     {"emergency", "activate keypad emergency",
+//     do_emergency, help_emergency},
+//     {"memo", "play/record voice memo",
+//     do_memo, help_memo},
+
+//     /* Undocumented commands */
+//     {"settime", "set time",
+//     do_set_time, help_set_time},   
+//     {"getsetup", "display/download setup",
+//     do_getsetup, help_getsetup},
+//     {"putsetup", "upload setup",
+//     do_putsetup, help_putsetup},
+//     {"getprogram", "display/download program",
+//     do_getprogram, help_getprogram},
+//     {"putprogram", "upload program",
+//     do_putprogram, help_putprogram},
+//     {"getvoices", "display/download voices",
+//     do_getvoices, help_getvoices},
+//     {"putvoices", "upload voices",
+//     do_putvoices, help_putvoices},
+
+//     /* End of commands */
+//     {NULL, NULL, NULL, NULL}
+// };
 
 int max_names_array[NUM_NAME_TYPES] = {MAX_ZONES, MAX_UNITS, MAX_BUTTONS,
     MAX_CODES, MAX_AREAS, MAX_THERMOS, MAX_MESGS, MAX_USERS, MAX_READERS};
 
+hai_comm_id g_id;
 /********************************************************************************/
+HAIEXPORT hai_comm_id get_hai_comm_id(void)
+{
+    return g_id;
+}
+
+HAIEXPORT char* clean_exit_term_connection(void)
+{
+    term_connection(&g_id);
+}
+
+HAIEXPORT char* initializeMain(void)
+{
+    int err = 0, nonparm;
+
+    /* Init parms */
+    *ip = 0;
+    *dev = 0;
+    *private_key = 0;
+    *code = 0;
+    *password = 0;
+    *haiconf = 0;
+    *hainame = 0;
+    csv = 0;
+    dump_config = 0;
+    name_cache_valid = 0;
+
+    /* Load parm file */
+    load_parm_file();
+    //comment out later
+    dump_parm_file();
+    /* Init connection */
+    load_name_cache();
+    if ((err = init_connection(&g_id, code)) != 0)
+    {
+        printf("Error initializing connection\n");
+        if (err == EHAITIMEOUT)
+            return "Network time-out";
+        term_connection(&g_id);
+        return "Error connecting to controller";
+    }
+
+    /* Save name cache */
+    save_name_cache();
+    return "Success creating Hai Omni Pro II connection";
+}
+
+// char* do_a_command(id)
+// {
+//     /* Do command */
+//     err = do_command(id, argc, argv);
+
+//     /* Check for timeout */
+//     /* Also check for CRD errors and try again. I get these often, but this does the trick...RickM */
+//     if ((err == EOMNIRESPONSE) || (err == EHAITIMEOUT) || err == EOMNICRC)
+//     {
+//         /* Reconnect */
+//         term_connection(id);
+//         init_connection(id, code);
+
+//         err = do_command(id, argc, argv);    
+//     }
+
+//     #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
+//     free(line);
+//     #endif
+
+//     /* Print error message */
+//     if (err > __ELASTOMNI)
+//     {
+//         switch(err)
+//         {
+//             case EINVCMD :
+//                 printf("error (%d) : Invalid command\n", err);
+//                 break;
+//             case EBADCODE :
+//                 printf("error (%d) : Invalid code\n", err);
+//                 break;
+//             case EBADFILE :
+//                 printf("error (%d) : Bad file format\n", err);
+//                 break;
+//         }
+//     }
+//     else if (err > __ELASTHAI)
+//         printf("error (%d) : %s\n", err, omni_strerror(err));
+//     else if (err > __ELASTERROR)
+//         printf("error (%d) : %s\n", err, hai_net_strerror(err));
+//     else if (err != 0)
+//         printf("error (%d) : %s\n", err, strerror(err));
+
+//     printf("\n");
+// }
+
 
 // int main(int argc, char **argv, char **environ)
 // {
@@ -446,44 +566,14 @@ int max_names_array[NUM_NAME_TYPES] = {MAX_ZONES, MAX_UNITS, MAX_BUTTONS,
 
 /********************************************************************************/
 
-void load_parm_file(char **environ)
+void load_parm_file(void)
 {
-    char *tok, *parm, *value;
+    char *tok, *value;
     char buffer[MAX_LINE];
     char line[MAX_LINE];
     FILE *f;
 
-    /* Find parm file path in env */
-    if (*haiconf == 0)
-    {
-        while (*environ != NULL)
-        {
-			if (strlen(*environ) < MAX_LINE)
-			{
-            strcpy(buffer, *environ);
-            tok = buffer;
-            parm = strtok(tok, "=\n\r");
-            value = strtok(NULL, "\n\r");
-
-            if (strcmp_no_case(parm, "HAICONF") == 0)
-            {
-                if (value != NULL)
-                    strcpy(haiconf, value);
-                break;
-            }
-			}
-
-            environ++;
-        }
-    }
-
-    /* Default path */ 
-    if (*haiconf == 0)
-#ifdef WIN32
-        strcpy(haiconf, "c:\\windows\\hai.ini");
-#else
-        strcpy(haiconf, "/etc/hai.conf");
-#endif
+    strcpy(haiconf, "/home/apoleon/.config/hai.conf");
 
     /* Open file */
     if ((f = fopen(haiconf, "r")) == NULL)
@@ -525,6 +615,7 @@ void dump_parm_file(void)
     printf("Baud: %d\n", baud = 9600);
     printf("CSV: %d\n", csv);
 }
+
 
 /********************************************************************************/
 
@@ -674,50 +765,6 @@ int parse_arg(char *arg)
     tok = buffer;
     parm = strtok(tok, "=\n\r");
 
-    /* First check for flags that don't have values (-h and -r) */
-
-    /* Test for help */
-    if ((strcmp_no_case("help", parm) == 0) || (strcmp("h", parm) == 0)
-        || (strcmp_no_case("?", parm) == 0))
-    {
-        printf("\nHAI command Program (ver 0.7)\n\n");
-        printf("Format:   hai [opts] [command]\n\n");
-        printf("Options:   -w=password\n");
-        printf("           -f=config file\n");       
-        printf("           -i=HAI ip address\n");
-        printf("          -ix=encrypted HAI ip address\n");       
-        printf("           -p=HAI port\n");
-        printf("          -px=encrypted HAI port\n");
-        printf("           -k=key\n");
-        printf("          -kx=encrypted key\n");
-        printf("           -c=user code\n");
-        printf("          -cx=encrypted user code\n");
-        printf("           -n=name cache file\n");       
-        printf("           -s=serial path\n");
-        printf("           -b=baud rate\n");
-        printf("           -r display comma separated values (CSV) display\n");       
-        printf("           -d dump config file\n");      
-        printf("           -h help\n\n");
-        printf("Commands: 'help' to see info on commands\n\n");
-        printf("Example:  hai -i=192.168.0.101 -p=4369 info\n\n");
-
-        exit(0);
-    }
-
-    /* Test for csv mode */
-    else if ((strcmp_no_case("csv", parm) == 0) || (strcmp("r", parm) == 0))
-    {
-        csv = 1;
-        return 0;
-    }
-
-    /* Test for dump mode */
-    else if ((strcmp_no_case("dump", parm) == 0) || (strcmp("d", parm) == 0))
-    {
-        dump_config = 1;
-        return 0;
-    }
-
     /* Now check for options that must have "=" with no spaces */
     
     value = strtok(NULL, "\n\r");
@@ -728,6 +775,7 @@ int parse_arg(char *arg)
         return -999999;
     }
     
+    printf("parse_arg line: %s, value = %s",buffer, value);
     /* Test for password */
     if ((strcmp_no_case("password", parm) == 0) || (strcmp("w", parm) == 0))
     {
@@ -1035,6 +1083,7 @@ int init_connection(hai_comm_id *id, val32 code)
 #endif
 
         /* Create network connection */
+        printf("opening hai network connection ip=%s port=%d key=%s\n",ip, port, private_key);
         if ((err = hai_net_open(id, ip, port, private_key)) != 0)
         {
             printf("error opening hai network connection\n");
@@ -1223,139 +1272,139 @@ void term_connection(hai_comm_id *id)
 
 /********************************************************************************/
 
-int cmd_loop(hai_comm_id *id)
-{
-#if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-    char *line;
-#else
-    char line[MAX_LINE];
-#endif
-    int argc, err;
-    char *argv[MAX_ARG];
+// int cmd_loop(hai_comm_id *id)
+// {
+// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
+//     char *line;
+// #else
+//     char line[MAX_LINE];
+// #endif
+//     int argc, err;
+//     char *argv[MAX_ARG];
 
-    /* Perform interactive loop */
-    while (1)
-    {
-        /* Get input */
-#if defined(GNUREADLINE_SUPPORT)        
-        if ((line = readline("hai> ")) == NULL)
-            break;        
-        add_history(line);
-#elif defined(READLINE_SUPPORT)
-        printf("hai> ");
-        if ((line = readline(stdin)) == NULL)
-            break;
-#else
-        printf("hai> ");
-        if (fgets(line, MAX_LINE, stdin) == NULL)
-            break;
-#endif
+//     /* Perform interactive loop */
+//     while (1)
+//     {
+//         /* Get input */
+// #if defined(GNUREADLINE_SUPPORT)        
+//         if ((line = readline("hai> ")) == NULL)
+//             break;        
+//         add_history(line);
+// #elif defined(READLINE_SUPPORT)
+//         printf("hai> ");
+//         if ((line = readline(stdin)) == NULL)
+//             break;
+// #else
+//         printf("hai> ");
+//         if (fgets(line, MAX_LINE, stdin) == NULL)
+//             break;
+// #endif
 
-        /* Parse command */
-        argc = 0;
-        argv[argc] = strtok(line, " \r\n");
-        while (argv[argc] != NULL)
-        {
-            argc++;
-            argv[argc] = strtok(NULL, " \r\n");
-        }
+//         /* Parse command */
+//         argc = 0;
+//         argv[argc] = strtok(line, " \r\n");
+//         while (argv[argc] != NULL)
+//         {
+//             argc++;
+//             argv[argc] = strtok(NULL, " \r\n");
+//         }
 
-        /* Check for null command */
-        if (argc == 0)
-        {
-#if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-            free(line);
-#endif
-            continue;
-        }
+//         /* Check for null command */
+//         if (argc == 0)
+//         {
+// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
+//             free(line);
+// #endif
+//             continue;
+//         }
 
-        /* Check for exit */
-        if (strcmp_no_case("exit", argv[0]) == 0 ||
-            strcmp_no_case("quit", argv[0]) == 0 ||
-            strcmp_no_case("x", argv[0]) == 0    ||
-            strcmp_no_case("q", argv[0]) == 0)
-        {
-#if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-            free(line);
-#endif
-            break;
-        }
-        if (strcmp_no_case(".", argv[0]) == 0)
-        {
-#if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-            free(line);
-#endif
-            break;
-        }
+//         /* Check for exit */
+//         if (strcmp_no_case("exit", argv[0]) == 0 ||
+//             strcmp_no_case("quit", argv[0]) == 0 ||
+//             strcmp_no_case("x", argv[0]) == 0    ||
+//             strcmp_no_case("q", argv[0]) == 0)
+//         {
+// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
+//             free(line);
+// #endif
+//             break;
+//         }
+//         if (strcmp_no_case(".", argv[0]) == 0)
+//         {
+// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
+//             free(line);
+// #endif
+//             break;
+//         }
 
-        /* Do command */
-        err = do_command(id, argc, argv);
+//         /* Do command */
+//         err = do_command(id, argc, argv);
 
-        /* Check for timeout */
-        /* Also check for CRD errors and try again. I get these often, but this does the trick...RickM */
-        if ((err == EOMNIRESPONSE) || (err == EHAITIMEOUT) || err == EOMNICRC)
-        {
-            /* Reconnect */
-            term_connection(id);
-            init_connection(id, code);
+//         /* Check for timeout */
+//         /* Also check for CRD errors and try again. I get these often, but this does the trick...RickM */
+//         if ((err == EOMNIRESPONSE) || (err == EHAITIMEOUT) || err == EOMNICRC)
+//         {
+//             /* Reconnect */
+//             term_connection(id);
+//             init_connection(id, code);
        
-            err = do_command(id, argc, argv);    
-        }
+//             err = do_command(id, argc, argv);    
+//         }
 
-#if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-        free(line);
-#endif
+// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
+//         free(line);
+// #endif
 
-        /* Print error message */
-        if (err > __ELASTOMNI)
-        {
-            switch(err)
-            {
-                case EINVCMD :
-                    printf("error (%d) : Invalid command\n", err);
-                    break;
-                case EBADCODE :
-                    printf("error (%d) : Invalid code\n", err);
-                    break;
-                case EBADFILE :
-                    printf("error (%d) : Bad file format\n", err);
-                    break;
-            }
-        }
-        else if (err > __ELASTHAI)
-            printf("error (%d) : %s\n", err, omni_strerror(err));
-        else if (err > __ELASTERROR)
-            printf("error (%d) : %s\n", err, hai_net_strerror(err));
-        else if (err != 0)
-            printf("error (%d) : %s\n", err, strerror(err));
+//         /* Print error message */
+//         if (err > __ELASTOMNI)
+//         {
+//             switch(err)
+//             {
+//                 case EINVCMD :
+//                     printf("error (%d) : Invalid command\n", err);
+//                     break;
+//                 case EBADCODE :
+//                     printf("error (%d) : Invalid code\n", err);
+//                     break;
+//                 case EBADFILE :
+//                     printf("error (%d) : Bad file format\n", err);
+//                     break;
+//             }
+//         }
+//         else if (err > __ELASTHAI)
+//             printf("error (%d) : %s\n", err, omni_strerror(err));
+//         else if (err > __ELASTERROR)
+//             printf("error (%d) : %s\n", err, hai_net_strerror(err));
+//         else if (err != 0)
+//             printf("error (%d) : %s\n", err, strerror(err));
 
-        printf("\n");
-    }
+//         printf("\n");
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
 /********************************************************************************/
 
-int do_command(hai_comm_id *id, int argc, char *argv[])
-{
-    cmd_item *cmd = cmd_list;
+// int do_command(hai_comm_id *id, int argc, char *argv[])
+// {
+//     cmd_item *cmd = cmd_list;
 
-    while (cmd->cmd_text != NULL)
-    {
-        if (strcmp_no_case(cmd->cmd_text, argv[0]) == 0)
-        {
-            if (cmd->func != NULL)
-            {
-                return ((cmd->func)(id, argc, argv));
-            }
-            break;
-        }
-        cmd++;
-    }
+//     while (cmd->cmd_text != NULL)
+//     {
+//         if (strcmp_no_case(cmd->cmd_text, argv[0]) == 0)
+//         {
+//             if (cmd->func != NULL)
+//             {
+//                 return ((cmd->func)(id, argc, argv));
+//             }
+//             break;
+//         }
+//         cmd++;
+//     }
 
-    return EINVCMD;
-}
+//     return EINVCMD;
+// }
 
 /********************************************************************************/
 
@@ -1486,13 +1535,13 @@ void decrypt_bytes(char *key, char *buf_in, int len_in, char *buf_out,
 
 /********************************************************************************/
 
-int do_sys_info(hai_comm_id *id, int argc, char *argv[])
+HAIEXPORT int do_sys_info(void)
 {
     sys_info data;
     int err;
 
     /* Request system info */
-    if ((err = omni_sys_info(id, &data)) != 0)
+    if ((err = omni_sys_info(&g_id, &data)) != 0)
         return err;
 
     /* Print model */
@@ -1554,7 +1603,7 @@ int do_sys_info(hai_comm_id *id, int argc, char *argv[])
 
 /********************************************************************************/
 
-int do_sys_stat(hai_comm_id *id, int argc, char *argv[])
+HAIEXPORT int do_sys_stat(void)
 {
     sys_stat data;
     int err, i;
@@ -1584,7 +1633,7 @@ int do_sys_stat(hai_comm_id *id, int argc, char *argv[])
     }
 
     /* Request system status */
-    if ((err = omni_sys_stat(id, &data)) != 0)
+    if ((err = omni_sys_stat(&g_id, &data)) != 0)
         return err;
 
     /* Print time/date */
@@ -3429,155 +3478,11 @@ int do_audio_cmd(hai_comm_id *id, int argc, char *argv[])
 
 /********************************************************************************/
 
-int do_usersetting_cmd(hai_comm_id *id, int argc, char *argv[])
-{
-    usersetting_stat data;
-    int cmd, i, p1 = 0, p2 = 0, utype;
-    int err;
-    val8 month, day, hour, min;
-    const char *units;
-    double temp;
-    const char *days="MTWTFSS";
-
-    if (omni_major_version < 3) {
-         printf("error (%d) : Invalid command: Firmware v3.0 or greater required.\n", EINVCMD);
-         return 0;
-    }
-    
-    /* Check arguments */
-    if (argc != 4)
-        return EINVAL;
-    /* printf("args=%s/%s/%s/%s\n", argv[0], argv[1], argv[2], argv[3]); */
-
-    /* Parse arguments */
-    /* user setting number */
-    p1 = atoi(argv[1]);
-    
-    /* Check range */
-    if ((p1 < 1) || p1 > max_usersettings) {
-         printf("error: usersetting not in range from 1 to %d\n", max_usersettings);
-         return EINVAL;
-    }
-
-    /* Get actual usersetting type */
-    if ((err = omni_usersetting_stat(id, p1, p1, &data)) != 0)
-         return err;
-    utype = (data.usersettings[0].type);
-    /* printf("User setting %d is type: %d (%s)\n", p1, utype, usersetting_text[utype]); */
-
-    switch (utype)
-    {
-    case CMD_USER_SET_NOTUSED:
-         /* Can't set an unused user setting */
-         return EINVAL;
-         break;
-    case CMD_USER_SET_NUMBER:
-         if (strncmp_no_case(argv[2], "number", 3) != 0)
-              return EINVAL;
-         p2 = atoi(argv[3]);
-         break;
-    case CMD_USER_SET_DURATION:
-         if (strncmp_no_case(argv[2], "duration", 3) != 0)
-              return EINVAL;
-         p2 = atoi(argv[3]);
-         if (p2 < 10) {
-              units = argv[3] + 1;
-         } else if (p2 < 100) {
-              units = argv[3] + 2;
-         } else if (p2 < 1000) {
-              units = argv[3] + 3;
-         } else {
-              return EINVAL;
-         }
-         /* printf("units=%s\n", units); */ /* RickM */
-         if (strncmp_no_case(units, "s", 1) == 0) {
-              /* value is OK for seconds */
-         } else if (strncmp_no_case(units, "m", 1) == 0) {
-              /* Add 100 for minutes */
-              p2 += 100;
-         } else if (strncmp_no_case(units, "h", 1) == 0) {
-              /* Add 200 for hours */
-              p2 += 200;
-         } else {
-              return EINVAL;
-         }
-         break;
-    case CMD_USER_SET_TEMPERATURE:
-         if (strncmp_no_case(argv[2], "temp", 3) != 0)
-              return EINVAL;
-         temp = atof(argv[3]);
-         units = argv[3] + (strlen(argv[3]) - 1);
-         /* printf("temp=%f units=%s\n", temp, units); */ /* RickM */
-         if (!isalpha(units[0]) || strcmp_no_case(units, "f") == 0) {
-              p2 = (int)(PUTF(temp));
-         } else if (strcmp_no_case(units, "c") == 0) {
-              p2 = (int)(PUTC(temp));
-         } else {
-              return EINVAL;
-         }
-         /* printf("temp=%f units=%s p2=%d tc=%f tf=%f\n", temp, units, p2, (double)GETC(p2), (double)GETF(p2)); */ /* RickM */
-         break;
-    case CMD_USER_SET_HUMIDITY:
-         if (strncmp_no_case(argv[2], "humidity", 3) != 0)
-              return EINVAL;
-         p2 = PUTF(atoi(argv[3]));
-         /* printf("p2=%02x\n", p2); */
-         break;
-    case CMD_USER_SET_DATE:
-         if (strncmp_no_case(argv[2], "date", 3) != 0)
-              return EINVAL;
-         if ((strlen(argv[3]) != 5) || (argv[3][2] != '/'))
-              return EINVAL; 
-         month = atoi(argv[3]);
-         day = atoi(argv[3] + 3);
-         p2 = month*256 + day;
-         /* printf("month=%d day=%d\n", month, day); */ /* RickM */
-         break;
-    case CMD_USER_SET_TIME:
-         if (strncmp_no_case(argv[2], "time", 3) != 0)
-              return EINVAL;  
-         if ((strlen(argv[3]) != 5) || (argv[3][2] != ':'))
-              return EINVAL;   
-         hour = atoi(argv[3]);
-         min = atoi(argv[3] + 3);
-         p2 = hour*256 + min;
-         /* printf("hour=%d min=%d\n", hour, min); */ /* RickM */
-         break;
-    case CMD_USER_SET_DAYSOFWEEK:
-         if (strncmp_no_case(argv[2], "days", 3) != 0)
-              return EINVAL;
-         if (strlen(argv[3]) != 7)
-              return EINVAL;
-         for (i = 0; i < 7; ++i) {
-              if (argv[3][i] != '-' && strncmp_no_case(argv[3]+i, days+i, 1) != 0) {
-                   return EINVAL;
-              }
-         }
-         p2 = 0;
-         p2 = argv[3][0] == '-' ? p2 : p2 | 0x02;
-         p2 = argv[3][1] == '-' ? p2 : p2 | 0x04;
-         p2 = argv[3][2] == '-' ? p2 : p2 | 0x08;
-         p2 = argv[3][3] == '-' ? p2 : p2 | 0x10;
-         p2 = argv[3][4] == '-' ? p2 : p2 | 0x20;
-         p2 = argv[3][5] == '-' ? p2 : p2 | 0x40;
-         p2 = argv[3][6] == '-' ? p2 : p2 | 0x80;
-         /* printf("days=%s %02x", argv[3], p2); */ /* RickM */
-         break;
-    case CMD_USER_SET_LEVEL:
-         if (strncmp_no_case(argv[2], "level", 3) != 0)
-              return EINVAL;
-         p2 = atoi(argv[3]);
-         break;
-    }
-         
-    /* Send command */
-    cmd = CMD_USER_SET;
-/*    printf("cmd/p1/p2: %d/%d/%d\n", cmd, p1, p2); */ /* RickM */
-    if ((err = omni_command(id, cmd, p1, p2)) != 0)
-        return err;
-
-    return 0;
-}
+// int do_usersetting_cmd(hai_comm_id *id, int argc, char *argv[])
+// {
+//..
+//     return 0;
+// }
 
 /********************************************************************************/
 
