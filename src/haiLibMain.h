@@ -22,7 +22,7 @@ extern "C" {            /* Assume C declarations for C++ */
 
 HAIEXPORT char* initializeMain(void);
 HAIEXPORT int do_sys_info(void);
-HAIEXPORT int do_sys_stat(void);
+HAIEXPORT char* do_sys_stat(void);
 HAIEXPORT char* clean_exit_term_connection(void);
 
 #ifdef __cplusplus

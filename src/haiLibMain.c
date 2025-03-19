@@ -69,7 +69,7 @@ void decrypt_bytes(char *key, char *buf_in, int len_in, char *buf_out,
     int *len_out);
 HAIEXPORT char* initializeMain(void);
 HAIEXPORT int do_sys_info(void);
-HAIEXPORT int do_sys_stat(void);
+HAIEXPORT char* do_sys_stat(void);
 int do_zone_stat(hai_comm_id *id, int argc, char *argv[]);
 int do_unit_stat(hai_comm_id *id, int argc, char *argv[]);
 int do_sensor_stat(hai_comm_id *id, int argc, char *argv[]);
@@ -127,6 +127,8 @@ char password[64];
 char hainame[128];
 int port = 0, baud = 9600, serial_mode = 0;
 unsigned char private_key[16];
+
+char sys_stat_str[1000];
 val32 code;
 val8 code_index;
 val8 omni_model;              
@@ -420,149 +422,6 @@ HAIEXPORT char* initializeMain(void)
     return "Success creating Hai Omni Pro II connection";
 }
 
-// char* do_a_command(id)
-// {
-//     /* Do command */
-//     err = do_command(id, argc, argv);
-
-//     /* Check for timeout */
-//     /* Also check for CRD errors and try again. I get these often, but this does the trick...RickM */
-//     if ((err == EOMNIRESPONSE) || (err == EHAITIMEOUT) || err == EOMNICRC)
-//     {
-//         /* Reconnect */
-//         term_connection(id);
-//         init_connection(id, code);
-
-//         err = do_command(id, argc, argv);    
-//     }
-
-//     #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-//     free(line);
-//     #endif
-
-//     /* Print error message */
-//     if (err > __ELASTOMNI)
-//     {
-//         switch(err)
-//         {
-//             case EINVCMD :
-//                 printf("error (%d) : Invalid command\n", err);
-//                 break;
-//             case EBADCODE :
-//                 printf("error (%d) : Invalid code\n", err);
-//                 break;
-//             case EBADFILE :
-//                 printf("error (%d) : Bad file format\n", err);
-//                 break;
-//         }
-//     }
-//     else if (err > __ELASTHAI)
-//         printf("error (%d) : %s\n", err, omni_strerror(err));
-//     else if (err > __ELASTERROR)
-//         printf("error (%d) : %s\n", err, hai_net_strerror(err));
-//     else if (err != 0)
-//         printf("error (%d) : %s\n", err, strerror(err));
-
-//     printf("\n");
-// }
-
-
-// int main(int argc, char **argv, char **environ)
-// {
-//     hai_comm_id id;
-//     int err = 0, nonparm;
-
-//     /* Init parms */
-//     *ip = 0;
-//     *dev = 0;
-//     *private_key = 0;
-//     *code = 0;
-//     *password = 0;
-//     *haiconf = 0;
-//     *hainame = 0;
-//     csv = 0;
-//     dump_config = 0;
-//     name_cache_valid = 0;
-
-//     /* Parse command line */
-//     if ((nonparm = parse_cmdline(argc, argv)) < 0)
-//     {
-//         if (nonparm != -999999) {
-//         printf("error: Unknown parameter %s\n", argv[-nonparm]);
-//         }
-//         return -1;
-//     }
-
-//     /* Load parm file */
-//     load_parm_file(environ);
-
-//     /* Display parm file */
-//     if (dump_config)
-//         dump_parm_file();
-
-//     /* Load name cache */
-//     load_name_cache();   
-
-//     /* Init connection */
-//     if ((err = init_connection(&id, code)) != 0)
-//     {
-//         printf("error initializing connection\n");
-//         if (err == EHAITIMEOUT)
-//             goto err_exit;
-//         else
-//             goto clean_exit;
-//     }
-
-//     /* Process command(s) */
-//     if (nonparm == argc)
-//     {
-//         /* Loop on commands */
-//         if ((err = cmd_loop(&id)) != 0)
-//             goto clean_exit;
-//     }
-//     else
-//         /* Single command */
-//         err = do_command(&id, argc - nonparm, argv + nonparm);
-
-//     /* Term connection */
-// clean_exit:
-//     term_connection(&id);
-
-// err_exit:
-//     /* Print error */
-//     if (err > __ELASTOMNI)
-//     {
-//         switch(err)
-//         {
-//             case EINVCMD :
-//                 printf("error (%d) : Invalid command\n", err);
-//                 break;
-//             case EBADCODE :
-//                 printf("error (%d) : Invalid code\n", err);
-//                 break;
-//             case EBADFILE :
-//                 printf("error (%d) : Bad file format\n", err);
-//                 break;
-//         }
-//     }
-//     else if (err > __ELASTHAI)
-//     {
-//         printf("error (%d) : %s\n", err, omni_strerror(err));
-//     }
-//     else if (err > __ELASTERROR)
-//     {
-//         printf("error (%d) : %s\n", err, hai_net_strerror(err));
-//     }
-//     else if (err != 0)
-//     {
-//         printf("error (%d) : %s\n", err, strerror(err));
-//     }
-
-//     /* Save name cache */
-//     save_name_cache();
-
-//     return err;
-// }
 
 /********************************************************************************/
 
@@ -1272,142 +1131,6 @@ void term_connection(hai_comm_id *id)
 
 /********************************************************************************/
 
-// int cmd_loop(hai_comm_id *id)
-// {
-// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-//     char *line;
-// #else
-//     char line[MAX_LINE];
-// #endif
-//     int argc, err;
-//     char *argv[MAX_ARG];
-
-//     /* Perform interactive loop */
-//     while (1)
-//     {
-//         /* Get input */
-// #if defined(GNUREADLINE_SUPPORT)        
-//         if ((line = readline("hai> ")) == NULL)
-//             break;        
-//         add_history(line);
-// #elif defined(READLINE_SUPPORT)
-//         printf("hai> ");
-//         if ((line = readline(stdin)) == NULL)
-//             break;
-// #else
-//         printf("hai> ");
-//         if (fgets(line, MAX_LINE, stdin) == NULL)
-//             break;
-// #endif
-
-//         /* Parse command */
-//         argc = 0;
-//         argv[argc] = strtok(line, " \r\n");
-//         while (argv[argc] != NULL)
-//         {
-//             argc++;
-//             argv[argc] = strtok(NULL, " \r\n");
-//         }
-
-//         /* Check for null command */
-//         if (argc == 0)
-//         {
-// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-//             free(line);
-// #endif
-//             continue;
-//         }
-
-//         /* Check for exit */
-//         if (strcmp_no_case("exit", argv[0]) == 0 ||
-//             strcmp_no_case("quit", argv[0]) == 0 ||
-//             strcmp_no_case("x", argv[0]) == 0    ||
-//             strcmp_no_case("q", argv[0]) == 0)
-//         {
-// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-//             free(line);
-// #endif
-//             break;
-//         }
-//         if (strcmp_no_case(".", argv[0]) == 0)
-//         {
-// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-//             free(line);
-// #endif
-//             break;
-//         }
-
-//         /* Do command */
-//         err = do_command(id, argc, argv);
-
-//         /* Check for timeout */
-//         /* Also check for CRD errors and try again. I get these often, but this does the trick...RickM */
-//         if ((err == EOMNIRESPONSE) || (err == EHAITIMEOUT) || err == EOMNICRC)
-//         {
-//             /* Reconnect */
-//             term_connection(id);
-//             init_connection(id, code);
-       
-//             err = do_command(id, argc, argv);    
-//         }
-
-// #if defined(GNUREADLINE_SUPPORT) || defined(READLINE_SUPPORT)        
-//         free(line);
-// #endif
-
-//         /* Print error message */
-//         if (err > __ELASTOMNI)
-//         {
-//             switch(err)
-//             {
-//                 case EINVCMD :
-//                     printf("error (%d) : Invalid command\n", err);
-//                     break;
-//                 case EBADCODE :
-//                     printf("error (%d) : Invalid code\n", err);
-//                     break;
-//                 case EBADFILE :
-//                     printf("error (%d) : Bad file format\n", err);
-//                     break;
-//             }
-//         }
-//         else if (err > __ELASTHAI)
-//             printf("error (%d) : %s\n", err, omni_strerror(err));
-//         else if (err > __ELASTERROR)
-//             printf("error (%d) : %s\n", err, hai_net_strerror(err));
-//         else if (err != 0)
-//             printf("error (%d) : %s\n", err, strerror(err));
-
-//         printf("\n");
-//     }
-
-//     return 0;
-// }
-
-/********************************************************************************/
-
-// int do_command(hai_comm_id *id, int argc, char *argv[])
-// {
-//     cmd_item *cmd = cmd_list;
-
-//     while (cmd->cmd_text != NULL)
-//     {
-//         if (strcmp_no_case(cmd->cmd_text, argv[0]) == 0)
-//         {
-//             if (cmd->func != NULL)
-//             {
-//                 return ((cmd->func)(id, argc, argv));
-//             }
-//             break;
-//         }
-//         cmd++;
-//     }
-
-//     return EINVCMD;
-// }
-
-/********************************************************************************/
-
 int do_encrypt(hai_comm_id *id, int argc, char *argv[])
 {
     char buffer[1024];
@@ -1603,11 +1326,15 @@ HAIEXPORT int do_sys_info(void)
 
 /********************************************************************************/
 
-HAIEXPORT int do_sys_stat(void)
+HAIEXPORT char* do_sys_stat(void)
 {
     sys_stat data;
     int err, i;
     int security_modes = 1, expansion_enclosures = 0;
+    int offset = 0;  // Keeps track of where we are in the buffer
+    int remaining = sizeof(sys_stat_str); // Remaining space in the buffer
+
+    memset(sys_stat_str, 0, sizeof(sys_stat_str));
 
     /* Calc model parameters */
     switch (omni_model)
@@ -1634,41 +1361,41 @@ HAIEXPORT int do_sys_stat(void)
 
     /* Request system status */
     if ((err = omni_sys_stat(&g_id, &data)) != 0)
-        return err;
+        return (char *)err;  // You might want to handle this differently
 
     /* Print time/date */
     if (!csv)
     {
-        printf("Time: ");
+        offset += snprintf(sys_stat_str + offset, remaining - offset, "Time: ");
         if (data.date_valid)
         {
-            printf("%s ", dow_text[data.day_of_week - 1]);
-            printf("%s ", month_text[data.month - 1]);
-            printf("%d ", data.day);
-            printf("%02d:%02d:%02d ", data.hour, data.minute, data.second);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%s ", dow_text[data.day_of_week - 1]);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%s ", month_text[data.month - 1]);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%d ", data.day);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%02d:%02d:%02d ", data.hour, data.minute, data.second);
             if (data.dst)
-                printf("(DST) ");
-            printf("%d\n", data.year + TIME_YEAR_BASE);
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "(DST) ");
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%d\n", data.year + TIME_YEAR_BASE);
         }
         else
-            printf("not valid\n");
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "not valid\n");
     }
     else
     {
         if (data.date_valid)
         {
-            printf("Time,%s,", dow_text[data.day_of_week - 1]);
-            printf("%s,", month_text[data.month - 1]);
-            printf("%d,", data.day);
-            printf("%02d:%02d:%02d,", data.hour, data.minute, data.second);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Time,%s,", dow_text[data.day_of_week - 1]);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%s,", month_text[data.month - 1]);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%d,", data.day);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%02d:%02d:%02d,", data.hour, data.minute, data.second);
             if (data.dst)
-                printf("DST,");
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "DST,");
             else
-                printf(",");
-            printf("%d\n", data.year + TIME_YEAR_BASE);
+                offset += snprintf(sys_stat_str + offset, remaining - offset, ",");
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%d\n", data.year + TIME_YEAR_BASE);
         }
         else
-            printf(",,,,,\n");
+            offset += snprintf(sys_stat_str + offset, remaining - offset, ",,,,,\n");
     }
 
     /* Print Sunrise/Sunset */
@@ -1676,55 +1403,57 @@ HAIEXPORT int do_sys_stat(void)
     {
         if (data.date_valid)
         {
-            printf("Sunrise: %02d:%02d\n", data.sunrise_hour, data.sunrise_minute);
-            printf("Sunset:  %02d:%02d\n", data.sunset_hour, data.sunset_minute);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Sunrise: %02d:%02d\n", data.sunrise_hour, data.sunrise_minute);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Sunset:  %02d:%02d\n", data.sunset_hour, data.sunset_minute);
         }
     }
     else
     {
         if (data.date_valid)
         {
-            printf("Sun,%02d:%02d,", data.sunrise_hour, data.sunrise_minute);
-            printf("%02d:%02d\n", data.sunset_hour, data.sunset_minute);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Sun,%02d:%02d,", data.sunrise_hour, data.sunrise_minute);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%02d:%02d\n", data.sunset_hour, data.sunset_minute);
         }
         else
-            printf(",\n");
+            offset += snprintf(sys_stat_str + offset, remaining - offset, ",\n");
     }
 
     /* Print battery reading */
     if (!csv)
-        printf("Battery Reading: %d\n", data.battery);
+        offset += snprintf(sys_stat_str + offset, remaining - offset, "Battery Reading: %d\n", data.battery);
     else
-        printf("Battery,%d\n", data.battery);   
+        offset += snprintf(sys_stat_str + offset, remaining - offset, "Battery,%d\n", data.battery);
 
     /* Print security modes */
     if ((omni_model == LUMINA) || (omni_model == LUMINAPRO))
     {
-    if (!csv)
-            printf("Security mode: %s\n", lumina_sec_text[data.security_mode[0]]);
+        if (!csv)
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Security mode: %s\n", lumina_sec_text[data.security_mode[0]]);
         else
-            printf("Security Mode,%s\n", lumina_sec_text[data.security_mode[0]]);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Security Mode,%s\n", lumina_sec_text[data.security_mode[0]]);
     }
     else
     {
         if (!csv)
         {
-            printf("Security Modes:\n");
-        for (i = 0; i < security_modes; i++)
-            printf("    Area %d : %s\n", i + 1, sec_text[data.security_mode[i]]);
-    }
-    else
-    {
-            printf("Security Modes,");
-        for (i = 0; i < security_modes; i++)
-        {
-            printf("%s", sec_text[data.security_mode[i]]);
-            if (i < (security_modes - 1))
-                printf(",");
-            else
-                printf("\n");            
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Security Modes:\n");
+            for (i = 0; i < security_modes; i++)
+            {
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "    Area %d : %s\n", i + 1, sec_text[data.security_mode[i]]);
+            }
         }
-    }
+        else
+        {
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Security Modes,");
+            for (i = 0; i < security_modes; i++)
+            {
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "%s", sec_text[data.security_mode[i]]);
+                if (i < (security_modes - 1))
+                    offset += snprintf(sys_stat_str + offset, remaining - offset, ",");
+                else
+                    offset += snprintf(sys_stat_str + offset, remaining - offset, "\n");
+            }
+        }
     }
 
     /* Expansion status */
@@ -1732,38 +1461,36 @@ HAIEXPORT int do_sys_stat(void)
     {
         if (expansion_enclosures)
         {
-            printf("Expansion Enclosures:\n");
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "Expansion Enclosures:\n");
             for (i = 0; i < expansion_enclosures; i++)
             {
-                printf("    %d : Battery=%d", i + 1,
-                    data.expansion_enclosure[i].battery);
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "    %d : Battery=%d", i + 1, data.expansion_enclosure[i].battery);
                 if (data.expansion_enclosure[i].status & EXP_STAT_AC)
-                    printf(", AC off");
+                    offset += snprintf(sys_stat_str + offset, remaining - offset, ", AC off");
                 if (data.expansion_enclosure[i].status & EXP_STAT_BATT)
-                    printf(", Batt low");
+                    offset += snprintf(sys_stat_str + offset, remaining - offset, ", Batt low");
                 if (data.expansion_enclosure[i].status & EXP_STAT_COMM)
-                    printf(", Comm failure");
-                printf("\n");
+                    offset += snprintf(sys_stat_str + offset, remaining - offset, ", Comm failure");
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "\n");
             }
         }
     }
     else
     {
-        printf("Expansion Enclosures,");
+        offset += snprintf(sys_stat_str + offset, remaining - offset, "Expansion Enclosures,");
         for (i = 0; i < expansion_enclosures; i++)
         {
-            if (expansion_enclosures)
-                printf("%d,%d", data.expansion_enclosure[i].battery,
-                    data.expansion_enclosure[i].status);
+            offset += snprintf(sys_stat_str + offset, remaining - offset, "%d,%d", data.expansion_enclosure[i].battery, data.expansion_enclosure[i].status);
             if (i < (expansion_enclosures - 1))
-                printf(",");
+                offset += snprintf(sys_stat_str + offset, remaining - offset, ",");
             else
-                printf("\n");
+                offset += snprintf(sys_stat_str + offset, remaining - offset, "\n");
         }
     }
 
-    return 0;
+    return sys_stat_str;
 }
+
 
 /********************************************************************************/
 
